@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Recommendations</title>
+</head>
+<body>
+    <h1>Stock Recommendations</h1>
+    <form method="POST">
+        <label for="market_cap_threshold">Market Cap Threshold:</label>
+        <input type="number" id="market_cap_threshold" name="market_cap_threshold" required>
+        <br>
+        <label for="target_to_current_ratio_threshold">Target to Current Price Ratio Threshold:</label>
+        <input type="number" step="0.01" id="target_to_current_ratio_threshold" name="target_to_current_ratio_threshold" required>
+        <br>
+        <label for="percentage_fall_threshold">Percentage Fall Threshold:</label>
+        <input type="number" step="0.01" id="percentage_fall_threshold" name="percentage_fall_threshold" required>
+        <br>
+        <label for="days_ago">Days Ago:</label>
+        <input type="number" id="days_ago" name="days_ago" required>
+        <br><br>
+        <button type="submit">Get Recommendations</button>
+    </form>
+
+    {% if stocks %}
+    <h2>Recommended Stocks</h2>
+    <ul>
+        {% for stock in stocks %}
+        <li>{{ stock }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</body>
+</html>
