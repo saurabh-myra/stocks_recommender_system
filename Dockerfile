@@ -1,6 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.8-slim
-
+FROM --platform=linux/amd64 python:3.8-slim-buster as build
 # Set the working directory in the container
 WORKDIR /app
 
