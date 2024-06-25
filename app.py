@@ -18,7 +18,8 @@ DAYS_AGO = 5  # Lookback period in days
 def get_stock_list():
     # Fetch lists directly as sets
     #symbols = set(si.tickers_sp500() + si.tickers_nasdaq() + si.tickers_dow())
-    symbols = {'AAPL', 'MSFT', 'IRWD', 'RCKT'}
+    symbols = set(si.tickers_dow())
+    #symbols = {'AAPL', 'MSFT', 'IRWD', 'RCKT'}
     symbols.discard("")  # Remove any empty strings
     return list(symbols)
 
