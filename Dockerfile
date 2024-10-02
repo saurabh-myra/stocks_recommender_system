@@ -11,12 +11,12 @@ COPY . /app
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Make port 8000 available to the world outside this container
-EXPOSE 8000
+# Make port 5051 available to the world outside this container
+EXPOSE 5051
 
 # Define environment variable
 ENV FLASK_APP=app.py
 
 # Run app.py when the container launches
 ENTRYPOINT ["python3"]
-CMD ["-m", "flask", "run", "--host=0.0.0.0", "--port=8000"]
+CMD ["-m", "flask", "run", "--host=0.0.0.0", "--port=5051"]

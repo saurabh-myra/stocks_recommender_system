@@ -21,15 +21,15 @@ docker build -t flask-app .
 
 ### Step 2: Run the Docker Container
 
-Run the Docker container, mapping port 5000 in the container to port 5000 on your local machine:
+Run the Docker container, mapping port 5051 in the container to port 5051 on your local machine:
 
 ```sh
-docker run -d -p 5000:5000 flask-app
+docker run -d -p 5051:5051 flask-app
 ```
 
 ### Step 3: Access the Application
 
-Open a web browser and navigate to `http://localhost:5000`. You should see the output of your Flask application.
+Open a web browser and navigate to `http://localhost:5051`. You should see the output of your Flask application.
 
 ## Deploying the Application to Azure
 
@@ -97,7 +97,7 @@ az acr login --name myContainerRegistry
 6. **Set Application Settings**:
    - In the left-hand menu under **Settings**, click on **Configuration**.
    - Add or ensure the following application setting is present:
-     - `WEBSITES_PORT` set to `5000`.
+     - `WEBSITES_PORT` set to `5051`.
    - Click **Save** to apply the changes.
 
 7. **Restart Your App Service**:
@@ -124,7 +124,7 @@ az acr login --name myContainerRegistry
   Ensure you have the correct username and password for the Azure Container Registry.
   
 - **Port Configuration**:
-  Ensure `WEBSITES_PORT` is set to `5000` in the Azure App Service configuration.
+  Ensure `WEBSITES_PORT` is set to `5051` in the Azure App Service configuration.
 
 - **Log Stream**:
   Use the log stream in Azure to monitor the application logs and identify any issues.
