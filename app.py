@@ -1,114 +1,99 @@
-import yfinance as yf
-import datetime
-import numpy as np
-from yahoo_fin import stock_info as si
-from requests.exceptions import ChunkedEncodingError
+import os
 from flask import Flask, request, render_template
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+import requests
+import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 app = Flask(__name__)
 
-# Parameters
-MARKET_CAP_THRESHOLD = 100000000  # Minimum market cap to consider
-TARGET_TO_CURRENT_RATIO_THRESHOLD = 1.5  # Minimum ratio of target to current price
-PERCENTAGE_FALL_THRESHOLD = 5  # Minimum percentage fall to consider
-DAYS_AGO = 5  # Lookback period in days
+# --- API Keys ---
+FINNHUB_KEY = "d1a0abhr01qltimud76gd1a0abhr01qltimud770"
+
+# --- Stock List ---
 
 
-def get_stock_list():
-    # Fetch lists directly as sets
-    #symbols = set(si.tickers_sp500() + si.tickers_nasdaq() + si.tickers_dow())
-    #symbols = set(si.tickers_dow())
-    symbols = {'AAPL', 'ACHC', 'IRWD', 'RCKT'}
-    symbols.discard("")  # Remove any empty strings
-    return list(symbols)
+def get_sp500_stocks():
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    tables = pd.read_html(url)
+    df = tables[0]
+    return df['Symbol'].tolist()
 
 
-def get_percentage_fall(stock_symbol, days_ago):
-    today = datetime.date.today()
-    start_day = today - datetime.timedelta(days=days_ago)
-
-    # Fetch historical data for the stock
-    stock_data = yf.download(stock_symbol, start=start_day, end=today)
-
-    if len(stock_data) < 2:
-        return None  # Not enough data
-
-    # Calculate the percentage fall
-    closing_prices = stock_data['Close']
-    percentage_fall = ((closing_prices.iloc[-1] - closing_prices.iloc[0]) / closing_prices.iloc[0]) * 100
-
-    return percentage_fall
+STOCKS = get_sp500_stocks()[:50]  # limit to first 50 for speed & API safety
 
 
-def get_quote_table(stock):
-    ticker = yf.Ticker(stock)
-    target_est = ticker.info.get('targetMeanPrice', 0)
-
-    # Fetch the current market price from the historical data
+def get_finnhub_quote_and_profile(stock):
     try:
-        stock_data = ticker.history(period='1d')
-        if not stock_data.empty:
-            quote_price = stock_data['Close'].iloc[-1]
-        else:
-            quote_price = 1  # Fallback value in case data is not available
-    except ChunkedEncodingError as e:
-        print(f"Error fetching market price for {stock}: {e}")
-        quote_price = 1  # Fallback value
+        quote = requests.get("https://finnhub.io/api/v1/quote", params={
+            "symbol": stock,
+            "token": FINNHUB_KEY
+        }).json()
+        current_price = quote.get("c", 0)
+        previous_close = quote.get("pc", 0)
 
-    quote_table = {
-        '1y Target Est': target_est,
-        'Quote Price': quote_price
-    }
-    return quote_table
+        profile = requests.get("https://finnhub.io/api/v1/stock/profile2", params={
+            "symbol": stock,
+            "token": FINNHUB_KEY
+        }).json()
+        market_cap = profile.get("marketCapitalization", 0) * 1_000_000
 
-
-def process_stock(stock, market_cap_threshold, target_to_current_ratio_threshold, percentage_fall_threshold, days_ago):
-    try:
-        stock_info = yf.Ticker(stock).info
-        market_cap = stock_info.get('marketCap', 0)
-        quote_table = get_quote_table(stock)
-
-        target_est = quote_table.get('1y Target Est', 0)
-        quote_price = quote_table.get('Quote Price', 1)
-
-        if market_cap > market_cap_threshold and target_est / quote_price >= target_to_current_ratio_threshold:
-            percentage_fall = get_percentage_fall(stock, days_ago)
-            if percentage_fall and np.abs(percentage_fall) > percentage_fall_threshold:
-                return stock
+        return current_price, previous_close, market_cap
     except Exception as e:
-        print(f'Error processing {stock}: {e}')
+        print(f"[ERROR] Finnhub API for {stock}: {e}")
+        return 0, 0, 0
+
+
+def process_stock(stock, market_cap_threshold, fall_threshold):
+    current_price, previous_close, market_cap = get_finnhub_quote_and_profile(stock)
+
+    if current_price == 0 or previous_close == 0 or market_cap < market_cap_threshold:
+        return None
+
+    percentage_fall = ((current_price - previous_close) / previous_close) * 100
+
+    if percentage_fall <= -fall_threshold:
+        return {
+            'stock': stock,
+            'current_price': round(current_price, 2),
+            'previous_close': round(previous_close, 2),
+            'market_cap': round(market_cap),
+            'percentage_fall': round(percentage_fall, 2)
+        }
+
     return None
 
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    results = []
+    market_cap_threshold = 100_000_000
+    fall_threshold = 5.0
+
     if request.method == 'POST':
-        market_cap_threshold = int(request.form['market_cap_threshold'])
-        target_to_current_ratio_threshold = float(request.form['target_to_current_ratio_threshold'])
-        percentage_fall_threshold = float(request.form['percentage_fall_threshold'])
-        days_ago = int(request.form['days_ago'])
+        try:
+            market_cap_threshold = int(request.form.get('market_cap_threshold', 100_000_000))
+            fall_threshold = float(request.form.get('fall_threshold', 5.0))
+        except ValueError:
+            pass
 
-        stocks_fallen = []
-        stock_list = get_stock_list()
+        def worker(symbol):
+            try:
+                return process_stock(symbol, market_cap_threshold, fall_threshold)
+            except Exception as e:
+                print(f"[ERROR] {symbol}: {e}")
+                return None
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {executor.submit(process_stock, stock, market_cap_threshold, target_to_current_ratio_threshold,
-                                       percentage_fall_threshold, days_ago): stock for stock in stock_list}
-            for future in futures:
-                try:
-                    result = future.result(timeout=20)
-                    if result:
-                        stocks_fallen.append(result)
-                except FuturesTimeoutError:
-                    print(f'Timeout occurred for {futures[future]}')
-                except Exception as e:
-                    print(f'Error processing {futures[future]}: {e}')
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(worker, stock): stock for stock in STOCKS}
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    results.append(result)
 
-        return render_template('index.html', stocks=stocks_fallen)
-
-    return render_template('index.html', stocks=[])
+    return render_template('index.html', results=results)
 
 
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=5051)
+    port = int(os.environ.get("PORT", 5050))
+    app.run(host='0.0.0.0', port=port)
+
