@@ -7,10 +7,12 @@
     <h1>📉 Stock Filter (1-Day Drop)</h1>
     <form method="POST">
         <label>Minimum Market Cap (USD):</label>
-        <input type="number" name="market_cap_threshold" value="100000000" required><br><br>
+        <input type="number" name="market_cap_threshold"
+               value="{{ request.form.market_cap_threshold or '' }}" required><br><br>
 
         <label>Minimum % Drop (1 Day):</label>
-        <input type="number" name="fall_threshold" step="0.1" value="5.0" required><br><br>
+        <input type="number" name="fall_threshold" step="0.1"
+               value="{{ request.form.fall_threshold or '' }}" required><br><br>
 
         <button type="submit">Run Filter</button>
     </form>
